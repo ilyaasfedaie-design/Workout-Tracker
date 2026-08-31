@@ -3,4 +3,4 @@
 
 # Except this
 !.gitignore
-!workout-tracker.html
+!index.html
