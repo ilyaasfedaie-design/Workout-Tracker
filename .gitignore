@@ -4,3 +4,4 @@
 # Except this
 !.gitignore
 !index.html
+!apple-touch-icon.png
