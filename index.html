@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <title>Workout Tracker</title>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -620,6 +623,63 @@
 
     @media (min-width: 480px) { body { max-width: 480px; margin: 0 auto; } }
 
+    /* Auth card */
+    .auth-status-row {
+      display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+    }
+    .auth-icon { font-size: 1rem; flex-shrink: 0; }
+    .auth-email { font-size: 0.82rem; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .auth-muted { font-size: 0.8rem; color: var(--muted); flex: 1; }
+    .auth-open-btn { background: none; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 0.22rem 0.55rem; font-size: 0.78rem; cursor: pointer; flex-shrink: 0; }
+    .auth-signout-btn { background: none; border: none; color: var(--muted); font-size: 0.78rem; cursor: pointer; flex-shrink: 0; }
+    .auth-signout-btn:hover { color: var(--danger); }
+    .auth-mode-row { display: flex; gap: 0.5rem; margin-top: 0.65rem; }
+    .auth-mode-btn { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 0.5rem; font-size: 0.85rem; cursor: pointer; transition: border-color 0.15s; }
+    .auth-mode-btn:hover { border-color: var(--accent); }
+    .auth-form { display: flex; flex-direction: column; gap: 0.45rem; margin-top: 0.65rem; }
+    .auth-error { font-size: 0.8rem; color: var(--danger); padding: 0.3rem 0; }
+    .auth-hint { font-size: 0.72rem; color: var(--muted); text-align: center; margin-top: 0.25rem; }
+
+    /* Day photo section */
+    .day-photo-section { margin-top: 0.5rem; }
+    .photo-add-row { display: flex; gap: 0.5rem; }
+    .photo-add-btn {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.3rem;
+      background: var(--bg); border: 1px dashed var(--border); border-radius: 8px;
+      color: var(--muted); font-size: 0.8rem; padding: 0.5rem; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .photo-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .day-photo-wrap { position: relative; }
+    .day-photo { width: 100%; border-radius: 8px; display: block; cursor: pointer; max-height: 340px; object-fit: cover; }
+    .photo-actions { display: flex; gap: 0.4rem; margin-top: 0.4rem; }
+    .photo-btn {
+      flex: 1; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--muted); font-size: 0.78rem; padding: 0.28rem 0.5rem;
+      cursor: pointer; text-align: center; transition: border-color 0.15s;
+    }
+    .photo-btn:hover { border-color: var(--accent); color: var(--text); }
+    .photo-btn-del:hover { border-color: var(--danger); color: var(--danger); }
+    .photo-loading { font-size: 0.8rem; color: var(--muted); padding: 0.4rem 0; }
+
+    /* Pump Photos gallery card */
+    .photo-gallery-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
+    .gallery-item { cursor: pointer; border-radius: 8px; overflow: hidden; background: var(--bg); }
+    .gallery-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; transition: opacity 0.15s; }
+    .gallery-item:hover .gallery-thumb { opacity: 0.8; }
+    .gallery-date { font-size: 0.62rem; color: var(--muted); padding: 0.2rem 0.3rem 0.3rem; text-align: center; }
+
+    /* Lightbox */
+    #lightbox {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92);
+      z-index: 9999; flex-direction: column; align-items: center; justify-content: center;
+      padding: 1.5rem; cursor: pointer;
+    }
+    #lightbox-img { max-width: 100%; max-height: 80dvh; border-radius: 8px; object-fit: contain; }
+    #lightbox-date { color: rgba(255,255,255,0.7); font-size: 0.85rem; margin-top: 0.75rem; }
+    #lightbox-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: #fff; font-size: 1.6rem; cursor: pointer; opacity: 0.7; line-height: 1; }
+    #lightbox-close:hover { opacity: 1; }
+
     /* Theme card */
     .theme-presets { display: flex; flex-wrap: wrap; gap: 0.4rem; }
     .theme-swatch {
@@ -662,6 +722,11 @@
     <div class="stat"><div class="stat-value" id="stat-total">0</div><div class="stat-label">Total Entries</div></div>
     <div class="stat"><div class="stat-value" id="stat-today">0</div><div class="stat-label">Today</div></div>
     <div class="stat"><div class="stat-value" id="stat-exercises">0</div><div class="stat-label">Exercises</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Account &amp; Sync</h2>
+    <div id="auth-content"><div class="auth-status-row"><span class="auth-muted">Connecting…</span></div></div>
   </div>
 
   <div class="card">
@@ -748,6 +813,18 @@
   <div class="card">
     <h2>Stats</h2>
     <div id="stats-content"></div>
+  </div>
+
+  <div class="card">
+    <h2>Pump Photos</h2>
+    <div id="pump-photos-content"><div class="empty">Connecting…</div></div>
+  </div>
+
+  <!-- Lightbox -->
+  <div id="lightbox" onclick="closeLightbox()">
+    <button id="lightbox-close" onclick="closeLightbox()">✕</button>
+    <img id="lightbox-img" src="" alt="" />
+    <div id="lightbox-date"></div>
   </div>
 
   <script>
@@ -899,10 +976,22 @@
     let builderOpen     = false;
     let builderExercises = [];
 
+    // ── Firebase state ────────────────────────────────────────────────────────
+    let db, fbAuth, currentUser;
+    let fsReady        = false;
+    let fsUid          = null;
+    let entriesCache   = null;     // null = fall back to localStorage
+    let dayPhotosCache = {};       // isoDate → base64 string | null (null = no photo)
+    let photoDatesSet  = new Set();
+    let authPanelOpen  = false;
+    let authMode       = '';       // '' | 'signup' | 'login'
+    let authError      = '';
+
     function saveNote(dateStr, text) {
       if (text.trim()) dayNotes[dateStr] = text;
       else delete dayNotes[dateStr];
       localStorage.setItem(NOTES_KEY, JSON.stringify(dayNotes));
+      fsWrite('notes', { notes: dayNotes });
     }
 
     // Combobox state keyed by input ID
@@ -915,11 +1004,16 @@
     // ── Storage ───────────────────────────────────────────────────────────────
 
     function load() {
+      if (entriesCache !== null) return entriesCache;
       try { return JSON.parse(localStorage.getItem(KEY)) || []; }
       catch { return []; }
     }
 
-    function save(entries) { localStorage.setItem(KEY, JSON.stringify(entries)); }
+    function save(entries) {
+      entriesCache = entries;
+      localStorage.setItem(KEY, JSON.stringify(entries));
+      fsWrite('entries', { items: entries });
+    }
 
     // ── Backward-compat: old entries had {sets:N, reps:N, weight:N} ───────────
 
@@ -1026,7 +1120,10 @@
 
     // ── Body weight ───────────────────────────────────────────────────────────
 
-    function saveBW() { localStorage.setItem(BW_KEY, JSON.stringify(bwEntries)); }
+    function saveBW() {
+      localStorage.setItem(BW_KEY, JSON.stringify(bwEntries));
+      fsWrite('bw', { items: bwEntries });
+    }
 
     function addBWEntry() {
       const val = parseFloat(document.getElementById('bw-input').value);
@@ -1252,6 +1349,7 @@
       renderBWSection();
       render();
       renderStatsCard();
+      fsWrite('settings', { unit, theme: currentTheme });
     }
 
     // ── Exercise list ─────────────────────────────────────────────────────────
@@ -2301,7 +2399,8 @@
       });
 
       entryList.innerHTML = [...groups.entries()].map(([dateStr, entries]) => {
-        const isOpen = openDates.has(dateStr);
+        const isOpen  = openDates.has(dateStr);
+        const isoDate = isoDay(entries[0].ts);
         let inner = '';
         if (isOpen) {
           const addArea = addingToDate === dateStr
@@ -2336,6 +2435,9 @@
                         placeholder="Notes for this day…"
                         oninput="saveNote('${dateStr}', this.value)"
               >${escHtml(dayNotes[dateStr] || '')}</textarea>
+            </div>
+            <div id="photo-section-${escHtml(isoDate)}" class="day-photo-section">
+              ${photoSectionHtml(isoDate)}
             </div>
           </div>`;
         }
@@ -2392,6 +2494,7 @@
 
     function saveThemeToStorage() {
       localStorage.setItem(THEME_KEY, JSON.stringify(currentTheme));
+      fsWrite('settings', { unit, theme: currentTheme });
     }
 
     function selectPreset(id) {
@@ -2457,6 +2560,7 @@
 
     function saveTemplates() {
       localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+      fsWrite('templates', { items: templates });
     }
 
     function toggleTemplateBuilder() {
@@ -2798,6 +2902,456 @@
         </div>`;
     }
 
+    // ── Firebase core ─────────────────────────────────────────────────────────
+
+    function fsWrite(docName, data) {
+      if (!fsReady || !fsUid) return;
+      db.collection('users').doc(fsUid).collection('data').doc(docName)
+        .set(data, { merge: true })
+        .catch(e => console.warn('Firestore write:', e));
+    }
+
+    function mergeData(anonData, existing) {
+      function mergeArr(a, b) {
+        const m = new Map();
+        [...(b || []), ...(a || [])].forEach(item => m.set(item.id, item));
+        return [...m.values()].sort((x, y) => (y.ts || 0) - (x.ts || 0));
+      }
+      return {
+        entries:   mergeArr(anonData.entries,   existing.entries),
+        bw:        mergeArr(anonData.bw,        existing.bw),
+        templates: mergeArr(anonData.templates, existing.templates),
+        notes: { ...(existing.notes || {}), ...(anonData.notes || {}) },
+      };
+    }
+
+    async function migrateToFirestore(uid, dataRef) {
+      const entries  = JSON.parse(localStorage.getItem(KEY)           || '[]');
+      const bw       = JSON.parse(localStorage.getItem(BW_KEY)        || '[]');
+      const tmpl     = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]');
+      const notes    = JSON.parse(localStorage.getItem(NOTES_KEY)     || '{}');
+      const u        = localStorage.getItem(UNIT_KEY) || 'kg';
+      const theme    = JSON.parse(localStorage.getItem(THEME_KEY)     || '{"id":"void"}');
+      const batch    = db.batch();
+      batch.set(dataRef.doc('entries'),   { items: entries });
+      batch.set(dataRef.doc('bw'),        { items: bw });
+      batch.set(dataRef.doc('templates'), { items: tmpl });
+      batch.set(dataRef.doc('notes'),     { notes });
+      batch.set(dataRef.doc('settings'),  { unit: u, theme });
+      await batch.commit();
+    }
+
+    async function loadFromFirestore(uid) {
+      const dataRef      = db.collection('users').doc(uid).collection('data');
+      const isAnonMerge  = !!window._pendingAnonData;
+
+      if (!isAnonMerge) {
+        const migratedKey = 'wt_migrated_' + uid;
+        if (!localStorage.getItem(migratedKey)) {
+          await migrateToFirestore(uid, dataRef);
+          localStorage.setItem(migratedKey, '1');
+        }
+      }
+
+      const [eSnap, bwSnap, tmplSnap, notesSnap, settSnap] = await Promise.all([
+        dataRef.doc('entries').get(),
+        dataRef.doc('bw').get(),
+        dataRef.doc('templates').get(),
+        dataRef.doc('notes').get(),
+        dataRef.doc('settings').get(),
+      ]);
+
+      if (eSnap.exists)    entriesCache = eSnap.data().items    || [];
+      if (bwSnap.exists)   bwEntries    = bwSnap.data().items   || [];
+      if (tmplSnap.exists) templates    = tmplSnap.data().items || [];
+      if (notesSnap.exists) dayNotes    = notesSnap.data().notes || {};
+
+      if (settSnap.exists) {
+        const s = settSnap.data();
+        if (s.unit)  { unit = s.unit; localStorage.setItem(UNIT_KEY, unit); }
+        if (s.theme) { currentTheme = s.theme; localStorage.setItem(THEME_KEY, JSON.stringify(s.theme)); }
+      }
+
+      if (isAnonMerge) {
+        const anonData = window._pendingAnonData;
+        delete window._pendingAnonData;
+        const merged = mergeData(anonData, { entries: entriesCache || [], bw: bwEntries, templates, notes: dayNotes });
+        entriesCache = merged.entries;
+        bwEntries    = merged.bw;
+        templates    = merged.templates;
+        dayNotes     = merged.notes;
+        const batch  = db.batch();
+        batch.set(dataRef.doc('entries'),   { items: merged.entries });
+        batch.set(dataRef.doc('bw'),        { items: merged.bw });
+        batch.set(dataRef.doc('templates'), { items: merged.templates });
+        batch.set(dataRef.doc('notes'),     { notes: merged.notes });
+        await batch.commit();
+      }
+
+      // Sync caches to localStorage
+      if (entriesCache !== null) localStorage.setItem(KEY,           JSON.stringify(entriesCache));
+      localStorage.setItem(BW_KEY,        JSON.stringify(bwEntries));
+      localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+      localStorage.setItem(NOTES_KEY,     JSON.stringify(dayNotes));
+
+      // Load photo index (doc IDs only — photos fetched lazily)
+      const photosSnap = await db.collection('users').doc(uid).collection('photos').get();
+      photoDatesSet    = new Set();
+      photosSnap.forEach(d => photoDatesSet.add(d.id));
+    }
+
+    async function handleAuthChange(user) {
+      if (!user) {
+        fbAuth.signInAnonymously().catch(e => console.error('Anon sign-in failed:', e));
+        return;
+      }
+      currentUser = user;
+      fsUid       = user.uid;
+      renderAuthCard();
+
+      try {
+        await loadFromFirestore(user.uid);
+      } catch (e) {
+        console.error('Firestore load error:', e);
+      }
+
+      fsReady = true;
+
+      // Re-render everything with Firestore data
+      applyTheme(themeVarsFor(currentTheme));
+      document.getElementById('btn-kg').classList.toggle('active', unit === 'kg');
+      document.getElementById('btn-lbs').classList.toggle('active', unit === 'lbs');
+      renderThemeCard();
+      renderFormSection();
+      renderBWSection();
+      renderTemplatesCard();
+      render();
+      updateStats();
+      renderAuthCard();
+      renderPumpPhotosCard();
+    }
+
+    function initFirebase() {
+      if (typeof firebase === 'undefined') return;
+      try {
+        firebase.initializeApp({
+          apiKey:            "AIzaSyBLXJTCtJ2xKxPye6i2jboLRPdFcfhyF50",
+          authDomain:        "workout-tracker-34d18.firebaseapp.com",
+          projectId:         "workout-tracker-34d18",
+          storageBucket:     "workout-tracker-34d18.firebasestorage.app",
+          messagingSenderId: "1071149543264",
+          appId:             "1:1071149543264:web:61c6008dc13a8dd8783805",
+          measurementId:     "G-R3VMGYCD0G"
+        });
+        db     = firebase.firestore();
+        fbAuth = firebase.auth();
+        fbAuth.onAuthStateChanged(handleAuthChange);
+      } catch(e) {
+        console.error('Firebase init error:', e);
+      }
+    }
+
+    // ── Auth UI ───────────────────────────────────────────────────────────────
+
+    function friendlyAuthError(code) {
+      return ({
+        'auth/email-already-in-use':      'That email is already in use.',
+        'auth/invalid-email':             'Invalid email address.',
+        'auth/weak-password':             'Password must be at least 6 characters.',
+        'auth/wrong-password':            'Incorrect password.',
+        'auth/invalid-credential':        'Incorrect email or password.',
+        'auth/user-not-found':            'No account found with that email.',
+        'auth/too-many-requests':         'Too many attempts — try again later.',
+        'auth/credential-already-in-use': 'That account already exists. Use "Log in" to access it.',
+      })[code] || 'Something went wrong. Please try again.';
+    }
+
+    function toggleAuthPanel() {
+      authPanelOpen = !authPanelOpen;
+      authMode  = '';
+      authError = '';
+      renderAuthCard();
+    }
+
+    function setAuthMode(mode) {
+      authMode  = mode;
+      authError = '';
+      renderAuthCard();
+      if (mode) requestAnimationFrame(() => document.getElementById('auth-email')?.focus());
+    }
+
+    async function submitAuth() {
+      const email    = document.getElementById('auth-email')?.value.trim();
+      const password = document.getElementById('auth-password')?.value;
+      if (!email || !password) return;
+      const btn = document.getElementById('auth-submit-btn');
+      if (btn) { btn.disabled = true; btn.textContent = '…'; }
+      authError = '';
+      try {
+        if (authMode === 'signup') {
+          const cred = firebase.auth.EmailAuthProvider.credential(email, password);
+          await fbAuth.currentUser.linkWithCredential(cred);
+          authPanelOpen = false; authMode = '';
+          renderAuthCard();
+        } else {
+          // Snapshot current anon data before signing out
+          window._pendingAnonData = {
+            entries:   entriesCache ? [...entriesCache] : load(),
+            bw:        [...bwEntries],
+            templates: [...templates],
+            notes:     { ...dayNotes },
+          };
+          fsReady = false;
+          await fbAuth.signInWithEmailAndPassword(email, password);
+          // handleAuthChange fires → loads existing account data → merges _pendingAnonData
+          authPanelOpen = false; authMode = '';
+        }
+      } catch(e) {
+        authError = friendlyAuthError(e.code);
+        renderAuthCard();
+      }
+    }
+
+    async function doSignOut() {
+      fsReady = false; fsUid = null; currentUser = null;
+      entriesCache = null; dayPhotosCache = {}; photoDatesSet = new Set();
+      authPanelOpen = false; authMode = '';
+      renderAuthCard();
+      await fbAuth.signOut();
+      // handleAuthChange(null) → signs in anonymously → handleAuthChange(anonUser)
+    }
+
+    function renderAuthCard() {
+      const el = document.getElementById('auth-content');
+      if (!el) return;
+      const user   = fbAuth ? fbAuth.currentUser : null;
+      const email  = user && !user.isAnonymous ? user.email : null;
+
+      if (!fsReady && !user) {
+        el.innerHTML = `<div class="auth-status-row"><span class="auth-muted">Connecting…</span></div>`;
+        return;
+      }
+
+      if (email && !authPanelOpen) {
+        el.innerHTML = `
+          <div class="auth-status-row">
+            <span class="auth-icon">☁</span>
+            <span class="auth-email">${escHtml(email)}</span>
+            <button class="auth-signout-btn" onclick="doSignOut()">Sign out</button>
+          </div>`;
+        return;
+      }
+
+      const statusHtml = email
+        ? `<span class="auth-email">${escHtml(email)}</span>`
+        : `<span class="auth-muted">Anonymous — data syncs, not backed up</span>`;
+
+      if (!authPanelOpen) {
+        el.innerHTML = `
+          <div class="auth-status-row">
+            <span class="auth-icon">☁</span>
+            ${statusHtml}
+            ${fsReady ? `<button class="auth-open-btn" onclick="toggleAuthPanel()">Sign in ›</button>` : ''}
+          </div>`;
+        return;
+      }
+
+      if (!authMode) {
+        el.innerHTML = `
+          <div class="auth-status-row">
+            <span class="auth-icon">☁</span>
+            ${statusHtml}
+            <button class="auth-open-btn" onclick="toggleAuthPanel()">✕</button>
+          </div>
+          <div class="auth-mode-row">
+            <button class="auth-mode-btn" onclick="setAuthMode('signup')">Create account</button>
+            <button class="auth-mode-btn" onclick="setAuthMode('login')">Log in</button>
+          </div>`;
+        return;
+      }
+
+      const isSignup = authMode === 'signup';
+      el.innerHTML = `
+        <div class="auth-status-row">
+          <span class="auth-icon">☁</span>
+          <span class="auth-muted">${isSignup ? 'Create account' : 'Log in to existing account'}</span>
+          <button class="auth-open-btn" onclick="setAuthMode('')">✕</button>
+        </div>
+        <div class="auth-form">
+          <input id="auth-email" type="email" placeholder="Email" autocomplete="email"
+                 onkeydown="if(event.key==='Enter')document.getElementById('auth-password').focus()" />
+          <input id="auth-password" type="password"
+                 placeholder="Password${isSignup ? ' (min 6 chars)' : ''}"
+                 autocomplete="${isSignup ? 'new-password' : 'current-password'}"
+                 onkeydown="if(event.key==='Enter')submitAuth()" />
+          ${authError ? `<div class="auth-error">${escHtml(authError)}</div>` : ''}
+          <button id="auth-submit-btn" class="primary" onclick="submitAuth()">
+            ${isSignup ? 'Create account & keep my data' : 'Log in & merge data'}
+          </button>
+          ${isSignup ? `<div class="auth-hint">Your current anonymous data will be linked to this account.</div>` : `<div class="auth-hint">Your current data will be merged with your existing account.</div>`}
+        </div>`;
+    }
+
+    // ── Pump photos ───────────────────────────────────────────────────────────
+
+    function compressPhoto(file, maxDim = 900, quality = 0.72) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = e => {
+          const img = new Image();
+          img.onerror = reject;
+          img.onload = () => {
+            const scale  = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const w = Math.round(img.width  * scale);
+            const h = Math.round(img.height * scale);
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handlePhotoUpload(event, isoDate) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const sectionEl = document.getElementById('photo-section-' + isoDate);
+      if (sectionEl) sectionEl.innerHTML = '<div class="photo-loading">Uploading…</div>';
+      try {
+        const base64 = await compressPhoto(file);
+        await savePhoto(isoDate, base64);
+        renderPhotoSection(isoDate);
+        renderPumpPhotosCard();
+      } catch(e) {
+        console.error('Photo upload error:', e);
+        if (sectionEl) sectionEl.innerHTML = photoSectionHtml(isoDate);
+      }
+    }
+
+    async function savePhoto(isoDate, base64) {
+      dayPhotosCache[isoDate] = base64;
+      photoDatesSet.add(isoDate);
+      if (fsReady && fsUid) {
+        await db.collection('users').doc(fsUid).collection('photos').doc(isoDate)
+          .set({ photo: base64, ts: Date.now() })
+          .catch(e => console.warn('Photo save error:', e));
+      }
+    }
+
+    async function deletePhoto(isoDate) {
+      delete dayPhotosCache[isoDate];
+      photoDatesSet.delete(isoDate);
+      renderPhotoSection(isoDate);
+      if (fsReady && fsUid) {
+        await db.collection('users').doc(fsUid).collection('photos').doc(isoDate)
+          .delete().catch(e => console.warn('Photo delete error:', e));
+      }
+      renderPumpPhotosCard();
+    }
+
+    async function loadPhotoForDate(isoDate) {
+      if (Object.prototype.hasOwnProperty.call(dayPhotosCache, isoDate)) return;
+      dayPhotosCache[isoDate] = null; // sentinel: fetch in progress
+      if (!fsReady || !fsUid) return;
+      try {
+        const snap = await db.collection('users').doc(fsUid).collection('photos').doc(isoDate).get();
+        dayPhotosCache[isoDate] = snap.exists ? snap.data().photo : null;
+      } catch(e) {
+        dayPhotosCache[isoDate] = null;
+      }
+      renderPhotoSection(isoDate);
+    }
+
+    function renderPhotoSection(isoDate) {
+      const el = document.getElementById('photo-section-' + isoDate);
+      if (el) el.innerHTML = photoSectionHtml(isoDate);
+    }
+
+    function photoSectionHtml(isoDate) {
+      const cached = dayPhotosCache[isoDate];
+      const knownExists = photoDatesSet.has(isoDate);
+
+      if (knownExists && !Object.prototype.hasOwnProperty.call(dayPhotosCache, isoDate)) {
+        loadPhotoForDate(isoDate);
+        return `<div class="photo-loading">Loading photo…</div>`;
+      }
+
+      if (typeof cached === 'string') {
+        return `<div class="day-photo-wrap">
+          <img src="${cached}" class="day-photo" onclick="openLightbox('${escHtml(isoDate)}')" />
+          <div class="photo-actions">
+            <label class="photo-btn">Replace
+              <input type="file" accept="image/*" style="display:none" onchange="handlePhotoUpload(event,'${escHtml(isoDate)}')">
+            </label>
+            <button class="photo-btn photo-btn-del" onclick="deletePhoto('${escHtml(isoDate)}')">Delete</button>
+          </div>
+        </div>`;
+      }
+
+      return `<div class="photo-add-row">
+        <label class="photo-add-btn">📷 Camera
+          <input type="file" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoUpload(event,'${escHtml(isoDate)}')">
+        </label>
+        <label class="photo-add-btn">🖼 Gallery
+          <input type="file" accept="image/*" style="display:none" onchange="handlePhotoUpload(event,'${escHtml(isoDate)}')">
+        </label>
+      </div>`;
+    }
+
+    function openLightbox(isoDate) {
+      const photo = dayPhotosCache[isoDate];
+      if (!photo) return;
+      document.getElementById('lightbox-img').src  = photo;
+      document.getElementById('lightbox-date').textContent =
+        new Date(isoDate + 'T12:00:00').toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      document.getElementById('lightbox').style.display = 'flex';
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightbox').style.display = 'none';
+    }
+
+    async function renderPumpPhotosCard() {
+      const el = document.getElementById('pump-photos-content');
+      if (!el) return;
+      if (!fsReady || !fsUid) {
+        el.innerHTML = '<div class="empty">Connecting…</div>';
+        return;
+      }
+      el.innerHTML = '<div class="empty">Loading…</div>';
+      try {
+        const snap = await db.collection('users').doc(fsUid).collection('photos')
+          .orderBy('ts', 'desc').get();
+        if (snap.empty) {
+          el.innerHTML = '<div class="empty">No pump photos yet. Expand any day in History → By Date to add one.</div>';
+          return;
+        }
+        const items = [];
+        snap.forEach(doc => {
+          const { photo, ts } = doc.data();
+          dayPhotosCache[doc.id] = photo;
+          photoDatesSet.add(doc.id);
+          items.push({ isoDate: doc.id, photo });
+        });
+        el.innerHTML = `<div class="photo-gallery-grid">
+          ${items.map(({ isoDate, photo }) => {
+            const label = new Date(isoDate + 'T12:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+            return `<div class="gallery-item" onclick="openLightbox('${escHtml(isoDate)}')">
+              <img src="${escHtml(photo)}" class="gallery-thumb" />
+              <div class="gallery-date">${label}</div>
+            </div>`;
+          }).join('')}
+        </div>`;
+      } catch(e) {
+        console.error('Gallery load error:', e);
+        el.innerHTML = '<div class="empty">Could not load photos.</div>';
+      }
+    }
+
     // ── Init ──────────────────────────────────────────────────────────────────
 
     document.getElementById('today-date').textContent = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
@@ -2811,6 +3365,7 @@
     renderTemplatesCard();
     render();
     updateStats();
+    initFirebase();
   </script>
 </body>
 </html>
