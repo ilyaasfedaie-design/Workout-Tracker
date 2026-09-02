@@ -506,9 +506,17 @@
     }
     .btn-start:active { background: var(--accent-dim); }
     .tmpl-builder { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem; margin-bottom: 0.75rem; }
-    .builder-ex-list { display: flex; flex-wrap: wrap; gap: 0.3rem; min-height: 2rem; margin: 0.4rem 0 0.6rem; }
+    .tmpl-builder-header { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 0.55rem; }
+    .builder-ex-list { display: flex; flex-direction: column; gap: 0.25rem; min-height: 1.5rem; margin: 0.4rem 0 0.6rem; }
+    .builder-ex-row-item { display: flex; align-items: center; gap: 0.4rem; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 0.28rem 0.45rem; }
+    .builder-ex-name { flex: 1; font-size: 0.85rem; }
+    .builder-ex-controls { display: flex; align-items: center; gap: 0.2rem; flex-shrink: 0; }
+    .builder-arrow { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.7rem; padding: 0.1rem 0.25rem; border-radius: 4px; line-height: 1; }
+    .builder-arrow:hover:not(:disabled) { color: var(--text); background: var(--border); }
+    .builder-arrow:disabled { opacity: 0.25; cursor: default; }
     .builder-empty { font-size: 0.78rem; color: var(--muted); padding: 0.2rem 0; }
     .tmpl-builder-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
+    .tmpl-edit-btn { color: var(--muted) !important; }
 
     /* Stats card */
     .stat-group { margin-bottom: 1rem; }
@@ -767,7 +775,7 @@
       <div class="header-actions">
         <button class="cal-icon-btn" id="browse-cal-btn" onclick="toggleCal('browse')" title="Browse by calendar">&#128197;</button>
         <div class="pill-toggle">
-          <button id="btn-list" class="active" onclick="setView('list')">List</button>
+          <button id="btn-list" class="active" onclick="setView('list')">Today</button>
           <button id="btn-date" onclick="setView('date')">By Date</button>
           <button id="btn-progress" onclick="setView('progress')">Progress</button>
           <button id="btn-prs" onclick="setView('prs')">PRs</button>
@@ -972,9 +980,10 @@
       catch { return []; }
     })();
 
-    let activeSession   = null; // { name, exercises:[], index }
-    let builderOpen     = false;
+    let activeSession    = null; // { name, exercises:[], index }
+    let builderOpen      = false;
     let builderExercises = [];
+    let editingTemplateId = null; // id of template being edited, or null for new
 
     // ── Firebase state ────────────────────────────────────────────────────────
     let db, fbAuth, currentUser;
@@ -2386,7 +2395,13 @@
       }
 
       if (currentView === 'list') {
-        entryList.innerHTML = filtered.map(e => entryHtml(e, formatDateFull(e.ts))).join('');
+        const todayStr = new Date().toDateString();
+        const todayEntries = filtered.filter(e => new Date(e.ts).toDateString() === todayStr);
+        if (!todayEntries.length) {
+          entryList.innerHTML = `<div class="empty">${query ? 'No matches today.' : "Nothing logged today yet — let's get it!"}</div>`;
+        } else {
+          entryList.innerHTML = todayEntries.map(e => entryHtml(e, formatTime(e.ts))).join('');
+        }
         return;
       }
 
@@ -2564,12 +2579,24 @@
     }
 
     function toggleTemplateBuilder() {
-      builderOpen = !builderOpen;
+      builderOpen       = !builderOpen;
+      editingTemplateId = null;
       if (builderOpen) builderExercises = [];
       renderTemplatesCard();
-      if (builderOpen) {
-        requestAnimationFrame(() => document.getElementById('tmpl-name')?.focus());
-      }
+      if (builderOpen) requestAnimationFrame(() => document.getElementById('tmpl-name')?.focus());
+    }
+
+    function startEditTemplate(id) {
+      const tmpl = templates.find(t => t.id === id);
+      if (!tmpl) return;
+      editingTemplateId = id;
+      builderOpen       = true;
+      builderExercises  = [...tmpl.exercises];
+      renderTemplatesCard();
+      requestAnimationFrame(() => {
+        const el = document.getElementById('tmpl-name');
+        if (el) { el.value = tmpl.name; el.focus(); }
+      });
     }
 
     function addToBuilder(name) {
@@ -2583,6 +2610,13 @@
       renderBuilderList();
     }
 
+    function moveBuilderEx(i, dir) {
+      const j = i + dir;
+      if (j < 0 || j >= builderExercises.length) return;
+      [builderExercises[i], builderExercises[j]] = [builderExercises[j], builderExercises[i]];
+      renderBuilderList();
+    }
+
     function renderBuilderList() {
       const el = document.getElementById('builder-ex-list');
       if (!el) return;
@@ -2590,23 +2624,30 @@
         el.innerHTML = '<div class="builder-empty">No exercises added yet</div>';
         return;
       }
-      el.innerHTML = builderExercises.map((ex, i) =>
-        `<div class="exercise-pill">${escHtml(ex)}<button class="pill-remove" onclick="removeFromBuilder(${i})">×</button></div>`
-      ).join('');
+      el.innerHTML = builderExercises.map((ex, i) => `
+        <div class="builder-ex-row-item">
+          <span class="builder-ex-name">${escHtml(ex)}</span>
+          <div class="builder-ex-controls">
+            <button class="builder-arrow" onclick="moveBuilderEx(${i},-1)" ${i === 0 ? 'disabled' : ''} title="Move up">▲</button>
+            <button class="builder-arrow" onclick="moveBuilderEx(${i},1)" ${i === builderExercises.length - 1 ? 'disabled' : ''} title="Move down">▼</button>
+            <button class="pill-remove" onclick="removeFromBuilder(${i})">×</button>
+          </div>
+        </div>`).join('');
     }
 
     function saveTemplate() {
       const nameEl = document.getElementById('tmpl-name');
       const name   = nameEl ? nameEl.value.trim() : '';
       if (!name) return shakeEl(nameEl);
-      if (!builderExercises.length) {
-        shakeEl(document.getElementById('builder-ex-list'));
-        return;
+      if (!builderExercises.length) { shakeEl(document.getElementById('builder-ex-list')); return; }
+      if (editingTemplateId !== null) {
+        const t = templates.find(t => t.id === editingTemplateId);
+        if (t) { t.name = name; t.exercises = [...builderExercises]; }
+      } else {
+        templates.push({ id: Date.now(), name, exercises: [...builderExercises] });
       }
-      templates.push({ id: Date.now(), name, exercises: [...builderExercises] });
       saveTemplates();
-      builderOpen     = false;
-      builderExercises = [];
+      builderOpen = false; builderExercises = []; editingTemplateId = null;
       renderTemplatesCard();
     }
 
@@ -2647,6 +2688,13 @@
       updateSessionBar();
     }
 
+    function backSession() {
+      if (!activeSession || activeSession.index <= 0) return;
+      activeSession.index--;
+      prefillSessionExercise();
+      updateSessionBar();
+    }
+
     function prefillSessionExercise() {
       if (!activeSession) return;
       const ex = activeSession.exercises[activeSession.index];
@@ -2662,12 +2710,9 @@
     function updateSessionBar() {
       const bar = document.getElementById('session-bar');
       if (!bar) return;
-      if (!activeSession) {
-        bar.style.display = 'none';
-        return;
-      }
+      if (!activeSession) { bar.style.display = 'none'; return; }
       const { name, exercises, index } = activeSession;
-      const ex = exercises[index];
+      const ex  = exercises[index];
       const pct = Math.round((index / exercises.length) * 100);
       bar.style.display = '';
       bar.innerHTML = `
@@ -2682,6 +2727,7 @@
           </div>
         </div>
         <div class="session-btns">
+          ${index > 0 ? `<button class="session-skip" onclick="backSession()">‹ Back</button>` : ''}
           <button class="session-skip" onclick="advanceSession()">Skip ›</button>
           <button class="session-stop" onclick="stopSession()">✕</button>
         </div>`;
@@ -2693,6 +2739,7 @@
 
       const builderHtml = builderOpen ? `
         <div class="tmpl-builder">
+          <div class="tmpl-builder-header">${editingTemplateId !== null ? 'Edit Template' : 'New Template'}</div>
           <input id="tmpl-name" class="tmpl-name-input" type="text" placeholder="Template name…" autocomplete="off" />
           <div class="tmpl-ex-row">
             <div class="combo-wrap" style="flex:1">
@@ -2704,11 +2751,9 @@
               <div id="tmpl-ex-dd" class="combo-dropdown"></div>
             </div>
           </div>
-          <div id="builder-ex-list" class="builder-ex-list">
-            <div class="builder-empty">No exercises added yet</div>
-          </div>
+          <div id="builder-ex-list" class="builder-ex-list"></div>
           <div class="tmpl-builder-actions">
-            <button class="btn-save" onclick="saveTemplate()">Save Template</button>
+            <button class="btn-save" onclick="saveTemplate()">${editingTemplateId !== null ? 'Save Changes' : 'Save Template'}</button>
             <button class="btn-cancel" onclick="toggleTemplateBuilder()">Cancel</button>
           </div>
         </div>` : '';
@@ -2719,6 +2764,7 @@
             <span class="template-name">${escHtml(t.name)}</span>
             <div class="template-actions">
               <button class="btn-start" onclick="startSession(${t.id})">▶ Start</button>
+              <button class="btn-cancel tmpl-edit-btn" onclick="startEditTemplate(${t.id})">Edit</button>
               <button class="btn-cancel" onclick="deleteTemplate(${t.id})">Delete</button>
             </div>
           </div>
